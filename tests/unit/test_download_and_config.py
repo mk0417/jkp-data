@@ -26,11 +26,14 @@ from jkp.data.config import (
     END_DATE,
     MAIN_FILTERS,
     PORTFOLIO_BP_MIN_N,
+    PORTFOLIO_CHARS,
     PORTFOLIO_PFS,
+    PORTFOLIO_SETTINGS,
     REGIONAL_COUNTRIES_MIN,
     REGIONAL_COUNTRY_EXCL,
     REGIONAL_MONTHS_MIN,
     REGIONAL_STOCKS_MIN,
+    ROLLING_DAILY_SPECS,
 )
 
 # =============================================================================
@@ -127,6 +130,91 @@ class TestConfig:
         assert REGIONAL_COUNTRY_EXCL == ("ZWE", "VEN"), (
             f"REGIONAL_COUNTRY_EXCL expected ('ZWE', 'VEN'), got {REGIONAL_COUNTRY_EXCL}"
         )
+
+    def test_portfolio_chars_is_unique_nonempty_str_list(self):
+        """PORTFOLIO_CHARS must be a list of unique non-empty strings."""
+        assert isinstance(PORTFOLIO_CHARS, list), (
+            f"PORTFOLIO_CHARS should be a list, got {type(PORTFOLIO_CHARS)}"
+        )
+        assert PORTFOLIO_CHARS, "PORTFOLIO_CHARS is empty"
+        assert all(isinstance(c, str) and c for c in PORTFOLIO_CHARS), (
+            "PORTFOLIO_CHARS entries must be non-empty strings"
+        )
+        assert len(PORTFOLIO_CHARS) == len(set(PORTFOLIO_CHARS)), (
+            "PORTFOLIO_CHARS contains duplicates"
+        )
+
+    def test_portfolio_chars_known_anchors(self):
+        """A handful of canonical characteristics must be present (typo guard)."""
+        anchors = {"market_equity", "ret_12_1", "be_me", "ivol_capm_21d", "qmj"}
+        missing = anchors - set(PORTFOLIO_CHARS)
+        assert not missing, f"PORTFOLIO_CHARS missing anchors: {sorted(missing)}"
+
+    def test_portfolio_settings_top_level_shape(self):
+        """PORTFOLIO_SETTINGS must carry the keys `portfolios()` reads at runtime."""
+        required = {
+            "end_date",
+            "pfs",
+            "source",
+            "wins_ret",
+            "bps",
+            "bp_min_n",
+            "cmp",
+            "signals",
+            "regional_pfs",
+            "daily_pf",
+            "ind_pf",
+        }
+        assert isinstance(PORTFOLIO_SETTINGS, dict)
+        missing = required - set(PORTFOLIO_SETTINGS)
+        assert not missing, f"PORTFOLIO_SETTINGS missing keys: {sorted(missing)}"
+
+    def test_portfolio_settings_nested_keys(self):
+        """Nested `cmp`/`signals`/`regional_pfs` blocks must keep their schema."""
+        assert set(PORTFOLIO_SETTINGS["cmp"]) == {"us", "int"}
+        assert set(PORTFOLIO_SETTINGS["signals"]) == {"us", "int", "standardize", "weight"}
+        assert set(PORTFOLIO_SETTINGS["regional_pfs"]) == {
+            "country_excl",
+            "country_weights",
+            "stocks_min",
+            "months_min",
+            "countries_min",
+        }
+        assert PORTFOLIO_SETTINGS["regional_pfs"]["country_excl"] == list(REGIONAL_COUNTRY_EXCL)
+        assert PORTFOLIO_SETTINGS["pfs"] == PORTFOLIO_PFS
+        assert PORTFOLIO_SETTINGS["bp_min_n"] == PORTFOLIO_BP_MIN_N
+
+
+class TestRollingDailySpecs:
+    """Integrity checks for ROLLING_DAILY_SPECS."""
+
+    KNOWN_SUFFIXES = {"_21d", "_126d", "_252d", "_1260d"}
+
+    def test_is_nonempty_list(self):
+        assert isinstance(ROLLING_DAILY_SPECS, list) and ROLLING_DAILY_SPECS
+
+    def test_suffixes_are_known(self):
+        """Every sfx must be in the set gen_aux_maps recognizes natively."""
+        sfxs = [sfx for sfx, _, _ in ROLLING_DAILY_SPECS]
+        unknown = set(sfxs) - self.KNOWN_SUFFIXES
+        assert not unknown, f"Unknown suffixes: {sorted(unknown)}"
+
+    def test_suffixes_are_unique(self):
+        sfxs = [sfx for sfx, _, _ in ROLLING_DAILY_SPECS]
+        assert len(sfxs) == len(set(sfxs)), f"Duplicate suffixes: {sfxs}"
+
+    def test_min_obs_positive_int(self):
+        for sfx, min_obs, _ in ROLLING_DAILY_SPECS:
+            assert isinstance(min_obs, int) and min_obs > 0, (
+                f"{sfx}: min_obs must be positive int, got {min_obs!r}"
+            )
+
+    def test_variables_are_nonempty_str_lists(self):
+        for sfx, _, vars_ in ROLLING_DAILY_SPECS:
+            assert isinstance(vars_, list) and vars_, f"{sfx}: variables list is empty"
+            assert all(isinstance(v, str) and v for v in vars_), (
+                f"{sfx}: variables must be non-empty strings, got {vars_!r}"
+            )
 
 
 # =============================================================================
